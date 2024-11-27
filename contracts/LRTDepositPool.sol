@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.21;
 
+import {VennFirewallConsumer} from "@ironblocks/firewall-consumer/contracts/consumers/VennFirewallConsumer.sol";
 import { UtilLib } from "./utils/UtilLib.sol";
 import { LRTConstants } from "./utils/LRTConstants.sol";
 
@@ -17,10 +18,12 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Context} from "@openzeppelin/contracts/utils/Context.sol";
+import { ContextUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
 
 /// @title LRTDepositPool - Deposit Pool Contract for LSTs
 /// @notice Handles LST asset deposits
-contract LRTDepositPool is ILRTDepositPool, LRTConfigRoleChecker, PausableUpgradeable, ReentrancyGuardUpgradeable {
+contract LRTDepositPool is VennFirewallConsumer, ILRTDepositPool, LRTConfigRoleChecker, PausableUpgradeable, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
 
     uint256 public maxNodeDelegatorLimit;
@@ -39,14 +42,17 @@ contract LRTDepositPool is ILRTDepositPool, LRTConfigRoleChecker, PausableUpgrad
 
     /// @dev Initializes the contract
     /// @param lrtConfigAddr LRT config address
-    function initialize(address lrtConfigAddr) external initializer {
+    function initialize(address lrtConfigAddr) external initializer firewallProtected {
         UtilLib.checkNonZeroAddress(lrtConfigAddr);
         __Pausable_init();
         __ReentrancyGuard_init();
         maxNodeDelegatorLimit = 10;
         lrtConfig = ILRTConfig(lrtConfigAddr);
         emit UpdatedLRTConfig(lrtConfigAddr);
-    }
+    
+		_setAddressBySlot(bytes32(uint256(keccak256("eip1967.firewall")) - 1), address(0));
+		_setAddressBySlot(bytes32(uint256(keccak256("eip1967.firewall.admin")) - 1), msg.sender);
+	}
 
     /*//////////////////////////////////////////////////////////////
                         receive functions
@@ -55,13 +61,13 @@ contract LRTDepositPool is ILRTDepositPool, LRTConfigRoleChecker, PausableUpgrad
     receive() external payable { }
 
     /// @dev receive from RewardReceiver
-    function receiveFromRewardReceiver() external payable { }
+    function receiveFromRewardReceiver() external payable firewallProtected { }
 
     /// @dev receive from LRTConverter
-    function receiveFromLRTConverter() external payable { }
+    function receiveFromLRTConverter() external payable firewallProtected { }
 
     /// @dev receive from NodeDelegator
-    function receiveFromNodeDelegator() external payable { }
+    function receiveFromNodeDelegator() external payable firewallProtected { }
 
     /*//////////////////////////////////////////////////////////////
                             user interactions
@@ -78,6 +84,7 @@ contract LRTDepositPool is ILRTDepositPool, LRTConfigRoleChecker, PausableUpgrad
         payable
         nonReentrant
         whenNotPaused
+        firewallProtected
     {
         // checks
         uint256 rsethAmountToMint = _beforeDeposit(LRTConstants.ETH_TOKEN, msg.value, minRSETHAmountExpected);
@@ -102,6 +109,7 @@ contract LRTDepositPool is ILRTDepositPool, LRTConfigRoleChecker, PausableUpgrad
         nonReentrant
         whenNotPaused
         onlySupportedAsset(asset)
+        firewallProtected
     {
         // checks
         uint256 rsethAmountToMint = _beforeDeposit(asset, depositAmount, minRSETHAmountExpected);
@@ -129,6 +137,7 @@ contract LRTDepositPool is ILRTDepositPool, LRTConfigRoleChecker, PausableUpgrad
         payable
         onlyLRTManager
         onlySupportedAsset(toAsset)
+        firewallProtected
     {
         // checks
         uint256 ethAmountSent = msg.value;
@@ -159,6 +168,7 @@ contract LRTDepositPool is ILRTDepositPool, LRTConfigRoleChecker, PausableUpgrad
         nonReentrant
         onlyLRTManager
         onlySupportedAsset(asset)
+        firewallProtected
     {
         address nodeDelegator = nodeDelegatorQueue[ndcIndex];
         IERC20(asset).safeTransfer(nodeDelegator, amount);
@@ -168,7 +178,7 @@ contract LRTDepositPool is ILRTDepositPool, LRTConfigRoleChecker, PausableUpgrad
     /// @dev only callable by LRT manager
     /// @param ndcIndex Index of NodeDelegator contract address in nodeDelegatorQueue
     /// @param amount ETH amount to transfer
-    function transferETHToNodeDelegator(uint256 ndcIndex, uint256 amount) external nonReentrant onlyLRTManager {
+    function transferETHToNodeDelegator(uint256 ndcIndex, uint256 amount) external nonReentrant onlyLRTManager firewallProtected {
         address nodeDelegator = nodeDelegatorQueue[ndcIndex];
         INodeDelegator(nodeDelegator).sendETHFromDepositPoolToNDC{ value: amount }();
         emit EthTransferred(nodeDelegator, amount);
@@ -186,6 +196,7 @@ contract LRTDepositPool is ILRTDepositPool, LRTConfigRoleChecker, PausableUpgrad
         nonReentrant
         onlyLRTManager
         onlySupportedAsset(asset)
+        firewallProtected
     {
         address lrtUnstakingVault = lrtConfig.getContract(LRTConstants.LRT_UNSTAKING_VAULT);
         IERC20(asset).safeTransfer(lrtUnstakingVault, amount);
@@ -194,7 +205,7 @@ contract LRTDepositPool is ILRTDepositPool, LRTConfigRoleChecker, PausableUpgrad
     /// @notice transfers ETH lying in this DepositPool to nLRTUnstakingVault contract
     /// @dev only callable by LRT manager
     /// @param amount ETH amount to transfer
-    function transferETHToLRTUnstakingVault(uint256 amount) external nonReentrant onlyLRTManager {
+    function transferETHToLRTUnstakingVault(uint256 amount) external nonReentrant onlyLRTManager firewallProtected {
         address lrtUnstakingVault = lrtConfig.getContract(LRTConstants.LRT_UNSTAKING_VAULT);
         ILRTUnstakingVault(lrtUnstakingVault).receiveFromLRTDepositPool{ value: amount }();
         emit EthTransferred(lrtUnstakingVault, amount);
@@ -207,7 +218,7 @@ contract LRTDepositPool is ILRTDepositPool, LRTConfigRoleChecker, PausableUpgrad
     /// @notice maximum amount that can be ignored
     /// @dev only callable by LRT admin
     /// @param maxNegligibleAmount_ Maximum amount that can be ignored
-    function setMaxNegligibleAmount(uint256 maxNegligibleAmount_) external onlyLRTAdmin {
+    function setMaxNegligibleAmount(uint256 maxNegligibleAmount_) external onlyLRTAdmin firewallProtected {
         maxNegligibleAmount = maxNegligibleAmount_;
         emit MaxNegligibleAmountUpdated(maxNegligibleAmount_);
     }
@@ -215,7 +226,7 @@ contract LRTDepositPool is ILRTDepositPool, LRTConfigRoleChecker, PausableUpgrad
     /// @notice update min amount to deposit
     /// @dev only callable by LRT admin
     /// @param minAmountToDeposit_ Minimum amount to deposit
-    function setMinAmountToDeposit(uint256 minAmountToDeposit_) external onlyLRTAdmin {
+    function setMinAmountToDeposit(uint256 minAmountToDeposit_) external onlyLRTAdmin firewallProtected {
         minAmountToDeposit = minAmountToDeposit_;
         emit MinAmountToDepositUpdated(minAmountToDeposit_);
     }
@@ -223,7 +234,7 @@ contract LRTDepositPool is ILRTDepositPool, LRTConfigRoleChecker, PausableUpgrad
     /// @notice update max node delegator count
     /// @dev only callable by LRT admin
     /// @param maxNodeDelegatorLimit_ Maximum count of node delegator
-    function updateMaxNodeDelegatorLimit(uint256 maxNodeDelegatorLimit_) external onlyLRTAdmin {
+    function updateMaxNodeDelegatorLimit(uint256 maxNodeDelegatorLimit_) external onlyLRTAdmin firewallProtected {
         if (maxNodeDelegatorLimit_ < nodeDelegatorQueue.length) {
             revert InvalidMaximumNodeDelegatorLimit();
         }
@@ -235,7 +246,7 @@ contract LRTDepositPool is ILRTDepositPool, LRTConfigRoleChecker, PausableUpgrad
     /// @notice add new node delegator contract addresses
     /// @dev only callable by LRT admin
     /// @param nodeDelegatorContracts Array of NodeDelegator contract addresses
-    function addNodeDelegatorContractToQueue(address[] calldata nodeDelegatorContracts) external onlyLRTAdmin {
+    function addNodeDelegatorContractToQueue(address[] calldata nodeDelegatorContracts) external onlyLRTAdmin firewallProtected {
         uint256 length = nodeDelegatorContracts.length;
         if (nodeDelegatorQueue.length + length > maxNodeDelegatorLimit) {
             revert MaximumNodeDelegatorLimitReached();
@@ -262,7 +273,7 @@ contract LRTDepositPool is ILRTDepositPool, LRTConfigRoleChecker, PausableUpgrad
     /// @notice remove node delegator contract address from queue
     /// @dev only callable by LRT admin
     /// @param nodeDelegatorAddress NodeDelegator contract address
-    function removeNodeDelegatorContractFromQueue(address nodeDelegatorAddress) external onlyLRTAdmin {
+    function removeNodeDelegatorContractFromQueue(address nodeDelegatorAddress) external onlyLRTAdmin firewallProtected {
         _removeNodeDelegatorContractFromQueue(nodeDelegatorAddress);
     }
 
@@ -272,6 +283,7 @@ contract LRTDepositPool is ILRTDepositPool, LRTConfigRoleChecker, PausableUpgrad
     function removeManyNodeDelegatorContractsFromQueue(address[] calldata nodeDelegatorContracts)
         external
         onlyLRTAdmin
+        firewallProtected
     {
         uint256 length = nodeDelegatorContracts.length;
         for (uint256 i; i < length;) {
@@ -283,12 +295,12 @@ contract LRTDepositPool is ILRTDepositPool, LRTConfigRoleChecker, PausableUpgrad
     }
 
     /// @dev Triggers stopped state. Contract must not be paused.
-    function pause() external onlyLRTManager {
+    function pause() external onlyLRTManager firewallProtected {
         _pause();
     }
 
     /// @dev Returns to normal state. Contract must be paused
-    function unpause() external onlyLRTAdmin {
+    function unpause() external onlyLRTAdmin firewallProtected {
         _unpause();
     }
 
@@ -299,7 +311,7 @@ contract LRTDepositPool is ILRTDepositPool, LRTConfigRoleChecker, PausableUpgrad
     /// @notice Approves the maximum amount of an asset to the LRTConverter contract
     /// @dev only supported assets can be deposited and only called by the LRT manager
     /// @param asset the asset to approve
-    function maxApproveToLRTConverter(address asset) external onlySupportedAsset(asset) onlyLRTManager {
+    function maxApproveToLRTConverter(address asset) external onlySupportedAsset(asset) onlyLRTManager firewallProtected {
         address lrtConverterAddress = lrtConfig.getContract(LRTConstants.LRT_CONVERTER);
         IERC20(asset).approve(lrtConverterAddress, type(uint256).max);
     }
@@ -582,4 +594,13 @@ contract LRTDepositPool is ILRTDepositPool, LRTConfigRoleChecker, PausableUpgrad
         // mint rseth for user
         IRSETH(rsethToken).mint(msg.sender, rsethAmountToMint);
     }
+
+    function _msgSender() internal view virtual override(Context, ContextUpgradeable) returns (address) {
+        return ContextUpgradeable._msgSender();
+    }
+
+    function _msgData() internal view virtual override(Context, ContextUpgradeable) returns (bytes calldata) {
+        return ContextUpgradeable._msgData();
+    }
+
 }

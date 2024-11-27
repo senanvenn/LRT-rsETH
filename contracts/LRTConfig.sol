@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.21;
 
+import {VennFirewallConsumer} from "@ironblocks/firewall-consumer/contracts/consumers/VennFirewallConsumer.sol";
 import { UtilLib } from "./utils/UtilLib.sol";
 import { LRTConstants } from "./utils/LRTConstants.sol";
 import { ILRTConfig } from "./interfaces/ILRTConfig.sol";
@@ -8,10 +9,12 @@ import { IStrategy } from "./external/eigenlayer/interfaces/IStrategy.sol";
 import { ILRTDepositPool } from "./interfaces/ILRTDepositPool.sol";
 
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { ContextUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
+import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 
 /// @title LRTConfig - LRT Config Contract
 /// @notice Handles LRT configuration
-contract LRTConfig is ILRTConfig, AccessControlUpgradeable {
+contract LRTConfig is VennFirewallConsumer, ILRTConfig, AccessControlUpgradeable {
     mapping(bytes32 tokenKey => address tokenAddress) public tokenMap;
     mapping(bytes32 contractKey => address contractAddress) public contractMap;
     mapping(address token => bool isSupported) public isSupportedAsset;
@@ -37,27 +40,27 @@ contract LRTConfig is ILRTConfig, AccessControlUpgradeable {
     /// @dev Initializes the contract
     /// @param admin Admin address
     /// @param stETH stETH address
-    /// @param ethX ETHX address
     /// @param rsETH_ rsETH address
-    function initialize(address admin, address stETH, address ethX, address rsETH_) external initializer {
+    function initialize(address admin, address stETH, address rsETH_) external initializer firewallProtected {
         UtilLib.checkNonZeroAddress(admin);
         UtilLib.checkNonZeroAddress(rsETH_);
 
         __AccessControl_init();
         _setToken(LRTConstants.ST_ETH_TOKEN, stETH);
-        _setToken(LRTConstants.ETHX_TOKEN, ethX);
         _addNewSupportedAsset(stETH, 100_000 ether);
-        _addNewSupportedAsset(ethX, 100_000 ether);
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
 
         rsETH = rsETH_;
-    }
+    
+		_setAddressBySlot(bytes32(uint256(keccak256("eip1967.firewall")) - 1), address(0));
+		_setAddressBySlot(bytes32(uint256(keccak256("eip1967.firewall.admin")) - 1), msg.sender);
+	}
 
     /// @dev Adds a new supported asset
     /// @param asset Asset address
     /// @param depositLimit Deposit limit for the asset
-    function addNewSupportedAsset(address asset, uint256 depositLimit) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function addNewSupportedAsset(address asset, uint256 depositLimit) external onlyRole(DEFAULT_ADMIN_ROLE) firewallProtected {
         _addNewSupportedAsset(asset, depositLimit);
     }
 
@@ -85,6 +88,7 @@ contract LRTConfig is ILRTConfig, AccessControlUpgradeable {
         external
         onlyRole(LRTConstants.MANAGER)
         onlySupportedAsset(asset)
+        firewallProtected
     {
         depositLimitByAsset[asset] = depositLimit;
         emit AssetDepositLimitUpdate(asset, depositLimit);
@@ -100,6 +104,7 @@ contract LRTConfig is ILRTConfig, AccessControlUpgradeable {
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
         onlySupportedAsset(asset)
+        firewallProtected
     {
         UtilLib.checkNonZeroAddress(strategy);
         if (assetStrategy[asset] == strategy) {
@@ -150,13 +155,13 @@ contract LRTConfig is ILRTConfig, AccessControlUpgradeable {
     //////////////////////////////////////////////////////////////*/
     /// @dev Sets the rsETH contract address. Only callable by the admin
     /// @param rsETH_ rsETH contract address
-    function setRSETH(address rsETH_) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setRSETH(address rsETH_) external onlyRole(DEFAULT_ADMIN_ROLE) firewallProtected {
         UtilLib.checkNonZeroAddress(rsETH_);
         rsETH = rsETH_;
         emit SetRSETH(rsETH_);
     }
 
-    function setToken(bytes32 tokenKey, address assetAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setToken(bytes32 tokenKey, address assetAddress) external onlyRole(DEFAULT_ADMIN_ROLE) firewallProtected {
         _setToken(tokenKey, assetAddress);
     }
 
@@ -172,7 +177,7 @@ contract LRTConfig is ILRTConfig, AccessControlUpgradeable {
         emit SetToken(key, val);
     }
 
-    function setContract(bytes32 contractKey, address contractAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setContract(bytes32 contractKey, address contractAddress) external onlyRole(DEFAULT_ADMIN_ROLE) firewallProtected {
         _setContract(contractKey, contractAddress);
     }
 
@@ -187,4 +192,13 @@ contract LRTConfig is ILRTConfig, AccessControlUpgradeable {
         contractMap[key] = val;
         emit SetContract(key, val);
     }
+
+    function _msgSender() internal view virtual override(Context, ContextUpgradeable) returns (address) {
+        return ContextUpgradeable._msgSender();
+    }
+
+    function _msgData() internal view virtual override(Context, ContextUpgradeable) returns (bytes calldata) {
+        return ContextUpgradeable._msgData();
+    }
+
 }

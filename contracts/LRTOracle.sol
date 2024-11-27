@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.21;
 
+import {VennFirewallConsumer} from "@ironblocks/firewall-consumer/contracts/consumers/VennFirewallConsumer.sol";
 import { UtilLib } from "./utils/UtilLib.sol";
 import { LRTConstants } from "./utils/LRTConstants.sol";
 import { LRTConfigRoleChecker, ILRTConfig } from "./utils/LRTConfigRoleChecker.sol";
@@ -14,7 +15,7 @@ import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/I
 
 /// @title LRTOracle Contract
 /// @notice oracle contract that calculates the exchange rate of assets
-contract LRTOracle is ILRTOracle, LRTConfigRoleChecker, Initializable {
+contract LRTOracle is VennFirewallConsumer, ILRTOracle, LRTConfigRoleChecker, Initializable {
     mapping(address asset => address priceOracle) public override assetPriceOracle;
 
     uint256 public override rsETHPrice;
@@ -34,12 +35,15 @@ contract LRTOracle is ILRTOracle, LRTConfigRoleChecker, Initializable {
 
     /// @dev Initializes the contract
     /// @param lrtConfigAddr LRT config address
-    function initialize(address lrtConfigAddr) external initializer {
+    function initialize(address lrtConfigAddr) external initializer firewallProtected {
         UtilLib.checkNonZeroAddress(lrtConfigAddr);
 
         lrtConfig = ILRTConfig(lrtConfigAddr);
         emit UpdatedLRTConfig(lrtConfigAddr);
-    }
+    
+		_setAddressBySlot(bytes32(uint256(keccak256("eip1967.firewall")) - 1), address(0));
+		_setAddressBySlot(bytes32(uint256(keccak256("eip1967.firewall.admin")) - 1), msg.sender);
+	}
 
     /*//////////////////////////////////////////////////////////////
                             write functions
@@ -47,7 +51,7 @@ contract LRTOracle is ILRTOracle, LRTConfigRoleChecker, Initializable {
 
     /// @notice updates RSETH/ETH exchange rate
     /// @dev calculates based on stakedAsset value received from eigen layer
-    function updateRSETHPrice() external {
+    function updateRSETHPrice() external firewallProtected {
         uint256 oldRsETHPrice = rsETHPrice;
         address rsETHTokenAddress = lrtConfig.rsETH();
         uint256 rsEthSupply = IRSETH(rsETHTokenAddress).totalSupply();
@@ -85,7 +89,7 @@ contract LRTOracle is ILRTOracle, LRTConfigRoleChecker, Initializable {
     /// @dev add/update the price oracle of any asset
     /// @dev only onlyLRTAdmin is allowed
     /// @param asset asset address for which oracle price needs to be added/updated
-    function updatePriceOracleFor(address asset, address priceOracle) external onlyLRTAdmin {
+    function updatePriceOracleFor(address asset, address priceOracle) external onlyLRTAdmin firewallProtected {
         UtilLib.checkNonZeroAddress(priceOracle);
         assetPriceOracle[asset] = priceOracle;
         emit AssetPriceOracleUpdate(asset, priceOracle);
@@ -94,7 +98,7 @@ contract LRTOracle is ILRTOracle, LRTConfigRoleChecker, Initializable {
     /// @dev set the price percentage limit
     /// @dev only onlyLRTAdmin is allowed
     /// @param _pricePercentageLimit price percentage limit
-    function setPricePercentageLimit(uint256 _pricePercentageLimit) external onlyLRTAdmin {
+    function setPricePercentageLimit(uint256 _pricePercentageLimit) external onlyLRTAdmin firewallProtected {
         pricePercentageLimit = _pricePercentageLimit;
         emit PricePercentageLimitUpdate(_pricePercentageLimit);
     }

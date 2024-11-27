@@ -6,7 +6,7 @@ libs = ["node_modules", "lib"]
 test = "test"
 cache_path = "cache_forge"
 optimizer = true
-optimizer_runs = 10_000
+optimizer_runs = 1
 solc_version = "0.8.21"
 build_info = true
 extra_output = ["storageLayout"]
@@ -29,3 +29,8 @@ wrap_comments = true
 localhost = "http://localhost:8545"
 goerli = "https://eth-goerli.nodereal.io/v1/${API_KEY_NODE_REAL}"
 mainnet = "https://eth-mainnet.nodereal.io/v1/${API_KEY_NODE_REAL}"
+holesky = "https://ethereum-holesky-rpc.publicnode.com"
+
+
+[etherscan]
+holesky = {key = "{ETHERSCAN_API_KEY}}", url = "https://api-holesky.etherscan.io/api"}
