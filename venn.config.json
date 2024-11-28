@@ -1,0 +1,14 @@
+{
+    "networks": {
+        "holesky": {
+            "contracts": {
+            "LRTConfig": "0x24eF26a75d60C974eF71B87f829741D196fCEA93",
+            "LRTDepositPool": "0xe09EaD5621D9e7252477727709A42d4A50Fbe2dE",
+            "LRTOracle": "0x91aEe1a6D84561B006B1709939F84B0003469d11",
+            "RSETH": "0x2F05BEe4fE3d9B097973A5046d968256C6d16824"
+        },
+
+            "ApprovedCalls": "0x7a638080095Ef53c7277664905ef295f7792887E"
+        }
+    }
+}

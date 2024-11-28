@@ -13,6 +13,7 @@ import {ChainlinkPriceOracle} from "../contracts/oracles/ChainlinkPriceOracle.so
 import {LRTOracle} from "../contracts/LRTOracle.sol";
 import {LRTConstants} from "../contracts/utils/LRTConstants.sol";
 import {MockPriceAggregator} from "../contracts/MockPriceAggregator.sol";
+import {NodeDelegator} from "../contracts/NodeDelegator.sol";
 
 contract DeployLRTScript is Script {
     // Contract instances
@@ -26,6 +27,7 @@ contract DeployLRTScript is Script {
     LRTDepositPool public depositPoolImpl;
     ChainlinkPriceOracle public chainlinkOracleImpl;
     LRTOracle public lrtOracleImpl;
+    NodeDelegator public nodeDelegatorImpl;
 
     // Proxy addresses
     address public rsethProxy;
@@ -60,6 +62,7 @@ contract DeployLRTScript is Script {
         depositPoolImpl = new LRTDepositPool();
         chainlinkOracleImpl = new ChainlinkPriceOracle();
         lrtOracleImpl = new LRTOracle();
+        nodeDelegatorImpl = new NodeDelegator();
 
         // 3. Deploy proxies with implementations
         bytes32 salt = bytes32(0);
@@ -112,6 +115,23 @@ contract DeployLRTScript is Script {
             salt
         );
         LRTDepositPool(payable(depositPoolProxy)).initialize(lrtConfigProxy);
+
+        // Deploy 5 NodeDelegator proxies (matching Goerli setup)
+        address[] memory nodeDelegators = new address[](5);
+        for (uint256 i = 0; i < 5; i++) {
+            bytes32 salt = keccak256(abi.encodePacked(i));
+            address payable nodeDelegatorProxy = payable(proxyFactory.create(
+                address(nodeDelegatorImpl),
+                address(proxyAdmin),
+                salt
+            ));
+            NodeDelegator(nodeDelegatorProxy).initialize(lrtConfigProxy);
+            nodeDelegators[i] = nodeDelegatorProxy;
+            console2.log("NodeDelegator", i + 1, "Proxy:", nodeDelegatorProxy);
+        }
+
+        // Add all NodeDelegators to the queue
+        LRTDepositPool(payable(depositPoolProxy)).addNodeDelegatorContractToQueue(nodeDelegators);
 
         // 4. Configure LRTConfig with deployed contracts
         LRTConfig config = LRTConfig(lrtConfigProxy);
